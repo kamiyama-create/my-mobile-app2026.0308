@@ -139,19 +139,24 @@ export default function App() {
     setProcessingItems(prev => [...prev, processingId]);
     
     try {
-      // 1. 画像処理の最適化: 1024pxに拡大して認識精度を向上
-      const { base64: base64Data, type: mimeType } = await getResizedBase64(file, 1024, 0.7);
+      // 1. 画像処理の最適化: 1600pxに拡大して認識精度を大幅に向上
+      const { base64: base64Data, type: mimeType } = await getResizedBase64(file, 1600, 0.9);
 
-      // 2. モデルの変更: 安定性と速度のバランスが良い 'gemini-3-flash-preview' を使用
+      // 2. モデルの変更: より高度な画像認識能力を持つ 'gemini-3.1-pro-preview' を使用
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.1-pro-preview",
         contents: {
           parts: [
             { inlineData: { data: base64Data, mimeType } },
-            { text: `レシートまたは領収書を解析して、日付、店舗名、合計金額、カテゴリー、備考を抽出してください。
-不明な項目がある場合は、空文字または0（金額の場合）を返してください。
-カテゴリーは「立替」または「預かり金」のいずれかを選択してください。デフォルトは「立替」です。` }
+            { text: `レシートまたは領収書の画像を解析して、以下の情報を抽出してください。
+- 日付 (YYYY-MM-DD形式)
+- 店舗名 (または発行元)
+- 合計金額 (数値のみ)
+- カテゴリー (「立替」または「預かり金」から選択)
+- 備考 (購入した主要な商品名など)
+
+※文字が読み取りにくい場合でも、推測できる範囲で入力してください。どうしても不明な場合は、日付は今日の日付、店舗名は「不明」、金額は0、カテゴリーは「立替」をデフォルトとしてください。` }
           ]
         },
         config: {
@@ -159,19 +164,18 @@ export default function App() {
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              date: { type: Type.STRING, description: "YYYY-MM-DD形式の日付" },
-              store_name: { type: Type.STRING, description: "店舗名または発行元" },
-              amount: { type: Type.NUMBER, description: "合計金額（数値のみ）" },
-              category: { type: Type.STRING, enum: ["立替", "預かり金"], description: "費用の種類" },
-              note: { type: Type.STRING, description: "補足情報（商品名など）" },
-            },
-            required: ["date", "store_name", "amount", "category", "note"]
+              date: { type: Type.STRING, description: "YYYY-MM-DD" },
+              store_name: { type: Type.STRING },
+              amount: { type: Type.NUMBER },
+              category: { type: Type.STRING, enum: ["立替", "預かり金"] },
+              note: { type: Type.STRING },
+            }
           }
         }
       });
 
       if (!response.text) {
-        throw new Error('Empty response from AI');
+        throw new Error('AIからの応答が空でした');
       }
 
       const result = JSON.parse(response.text);
@@ -186,22 +190,12 @@ export default function App() {
         timestamp: Date.now()
       };
       
-      // 履歴に追加
       setHistory(prev => [newEntry, ...prev]);
-      
-      // 自動送信はせず、確認画面を表示する
       setCurrentReceipt(newEntry);
-      
-      showToast(`${newEntry.store_name}を解析しました。内容を確認して送信してください。`, 'success');
+      showToast(`${newEntry.store_name}を解析しました。`, 'success');
     } catch (error) {
       console.error('Analysis error:', error);
-      // エラーメッセージをより詳細に
-      const errorMessage = error instanceof Error ? error.message : '不明なエラー';
-      if (errorMessage.includes('API_KEY')) {
-        showToast('APIキーの設定を確認してください。', 'error');
-      } else {
-        showToast('解析に失敗しました。画像が不鮮明な可能性があります。', 'error');
-      }
+      showToast('解析に失敗しました。もう一度撮影し直すか、手動で入力してください。', 'error');
     } finally {
       setProcessingItems(prev => prev.filter(id => id !== processingId));
     }
