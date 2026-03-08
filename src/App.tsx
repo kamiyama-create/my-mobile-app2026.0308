@@ -38,27 +38,80 @@ const App: React.FC = () => {
   } = useReceipts();
   const { toast, showToast } = useToast();
 
-  // スプレッドシート同期（シミュレーション）
+  // スプレッドシート同期 (GAS)
   const syncWithSpreadsheet = async () => {
+    const gasUrl = import.meta.env.VITE_GAS_URL;
+    if (!gasUrl) {
+      showToast('GASのWebアプリURLが設定されていません。', 'error');
+      return;
+    }
+
     setIsSyncing(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      const mockData: ReceiptData[] = [
-        { id: 'ss-1', date: '2026-03-01', store_name: 'スプレッドシート同期', amount: 12500, category: '立替', note: '自動同期データ', status: 'sent', timestamp: Date.now() },
-        { id: 'ss-2', date: '2026-03-03', store_name: 'スプレッドシート同期', amount: 8900, category: '預かり金', note: '自動同期データ', status: 'sent', timestamp: Date.now() },
-        { id: 'ss-3', date: '2026-03-05', store_name: 'スプレッドシート同期', amount: 15000, category: '立替', note: '自動同期データ', status: 'sent', timestamp: Date.now() },
-      ];
+      const res = await fetch(`${gasUrl}?action=read`);
+      if (!res.ok) throw new Error('Read failed');
+      const data = await res.json();
       
-      setHistory(prev => {
-        const existingIds = new Set(prev.map(p => p.id));
-        const newData = mockData.filter(m => !existingIds.has(m.id));
-        return [...newData, ...prev];
-      });
-      showToast('スプレッドシートと同期しました。', 'success');
+      if (data && Array.isArray(data)) {
+        const syncedData: ReceiptData[] = data.map((row: any) => ({
+          id: row.id,
+          date: row.date,
+          store_name: row.store_name,
+          amount: Number(row.amount),
+          type: row.type as any,
+          category: row.category,
+          note: row.note,
+          status: 'sent',
+          timestamp: Number(row.timestamp)
+        }));
+
+        setHistory(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const newData = syncedData.filter(m => !existingIds.has(m.id));
+          return [...newData, ...prev];
+        });
+        showToast('スプレッドシートからデータを取得しました。', 'success');
+      }
     } catch (err) {
-      showToast('同期に失敗しました。', 'error');
+      console.error('Sync error:', err);
+      showToast('同期に失敗しました。URLを確認してください。', 'error');
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const sendToSpreadsheet = async (receipt: ReceiptData) => {
+    const gasUrl = import.meta.env.VITE_GAS_URL;
+    if (!gasUrl) {
+      showToast('GASのWebアプリURLが設定されていません。', 'error');
+      return false;
+    }
+
+    try {
+      const res = await fetch(gasUrl, {
+        method: 'POST',
+        mode: 'no-cors', // GASのCORS制限回避のため
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'append',
+          data: {
+            id: receipt.id,
+            date: receipt.date,
+            store_name: receipt.store_name,
+            amount: receipt.amount,
+            type: receipt.type,
+            category: receipt.category,
+            note: receipt.note,
+            timestamp: receipt.timestamp
+          }
+        })
+      });
+      // no-cors の場合、res.ok は常に false になるが、送信自体は成功している可能性がある
+      // ユーザー体験を優先し、エラーが出なければ成功とみなす
+      return true;
+    } catch (e) {
+      console.error('Append failed', e);
+      return false;
     }
   };
 
@@ -75,7 +128,8 @@ const App: React.FC = () => {
         date: result.date || new Date().toISOString().split('T')[0],
         store_name: result.store_name || '不明な店舗',
         amount: Number(result.amount) || 0,
-        category: result.category || '立替',
+        type: (result.type as any) || 'advance',
+        category: result.category || 'その他',
         note: result.note || '',
         status: 'pending',
         timestamp: Date.now()
@@ -92,7 +146,16 @@ const App: React.FC = () => {
     }
   };
 
-  const totalAmount = history.reduce((sum, item) => sum + item.amount, 0);
+  const totals = history.reduce((acc, item) => {
+    if (item.type === 'advance') {
+      acc.advance += item.amount;
+    } else {
+      acc.deposit += item.amount;
+    }
+    return acc;
+  }, { advance: 0, deposit: 0 });
+
+  const grandTotal = totals.advance - totals.deposit;
 
   return (
     <div className="min-h-screen bg-stone-50 font-sans text-stone-900 pb-32">
@@ -132,23 +195,28 @@ const App: React.FC = () => {
         >
           <div className="relative z-10">
             <div className="flex justify-between items-start">
-              <span className="text-xs font-bold uppercase tracking-[0.2em] opacity-70">今月の合計支出</span>
+              <span className="text-xs font-bold uppercase tracking-[0.2em] opacity-70">今月の精算状況</span>
               <div className="bg-[#FF9900] px-3 py-1 rounded-full text-[10px] font-bold shadow-lg shadow-orange-500/30">
                 ACTIVE
               </div>
             </div>
-            <div className="flex items-baseline gap-2 mt-2">
-              <span className="text-5xl font-black">¥{totalAmount.toLocaleString()}</span>
-              <span className="text-blue-200 font-bold">合計</span>
-            </div>
-            <div className="mt-8 flex gap-4">
-              <div className="bg-white/5 backdrop-blur-md rounded-2xl p-4 flex-1 border border-white/10">
-                <span className="text-[10px] font-bold uppercase tracking-wider opacity-60">件数</span>
-                <p className="text-xl font-black mt-1">{history.length} <span className="text-xs opacity-60">件</span></p>
+            
+            <div className="mt-4 grid grid-cols-2 gap-4">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider opacity-60">立替金合計</span>
+                <p className="text-2xl font-black">¥{totals.advance.toLocaleString()}</p>
               </div>
-              <div className="bg-white/5 backdrop-blur-md rounded-2xl p-4 flex-1 border border-white/10">
-                <span className="text-[10px] font-bold uppercase tracking-wider opacity-60">送信済み</span>
-                <p className="text-xl font-black mt-1">{history.filter(h => h.status === 'sent').length} <span className="text-xs opacity-60">件</span></p>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider opacity-60">預かり金合計</span>
+                <p className="text-2xl font-black">¥{totals.deposit.toLocaleString()}</p>
+              </div>
+            </div>
+
+            <div className="mt-8 pt-6 border-t border-white/10">
+              <span className="text-[10px] font-bold uppercase tracking-wider opacity-60">精算トータル</span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-5xl font-black">¥{grandTotal.toLocaleString()}</span>
+                <span className="text-blue-200 font-bold">残高</span>
               </div>
             </div>
           </div>
@@ -222,14 +290,23 @@ const App: React.FC = () => {
         {currentReceipt && (
           <ReceiptEditor 
             receipt={currentReceipt}
-            onSave={(updated) => {
+            onSave={async (updated) => {
+              let finalStatus = updated.status;
+              if (updated.status === 'sent') {
+                const success = await sendToSpreadsheet(updated);
+                if (!success) {
+                  showToast('スプレッドシートへの送信に失敗しました。', 'error');
+                  finalStatus = 'pending';
+                }
+              }
+
               const exists = history.find(h => h.id === updated.id);
               if (exists) {
-                updateReceipt(updated);
-                showToast('更新しました。', 'success');
+                updateReceipt({ ...updated, status: finalStatus });
+                showToast(finalStatus === 'sent' ? '送信しました。' : '更新しました。', 'success');
               } else {
-                addReceipt(updated);
-                showToast('保存しました。', 'success');
+                addReceipt({ ...updated, status: finalStatus });
+                showToast(finalStatus === 'sent' ? '送信しました。' : '保存しました。', 'success');
               }
             }}
             onDelete={deleteReceipt}

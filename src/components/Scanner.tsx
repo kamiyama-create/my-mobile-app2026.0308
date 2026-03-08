@@ -37,20 +37,43 @@ export const Scanner: React.FC<ScannerProps> = ({ onCapture, onClose, isProcessi
   }, [startCamera]);
 
   const capture = () => {
-    if (!videoRef.current) return;
+    if (!videoRef.current || isProcessing) return;
+    
+    const video = videoRef.current;
     const canvas = document.createElement('canvas');
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
+    
+    // ビデオの実際の解像度を取得（取得できない場合は表示サイズを使用）
+    const width = video.videoWidth || video.clientWidth;
+    const height = video.videoHeight || video.clientHeight;
+    
+    // 最大サイズを制限してメモリ負荷を軽減
+    const maxSide = 1280;
+    let targetWidth = width;
+    let targetHeight = height;
+    
+    if (width > maxSide || height > maxSide) {
+      if (width > height) {
+        targetWidth = maxSide;
+        targetHeight = (height / width) * maxSide;
+      } else {
+        targetHeight = maxSide;
+        targetWidth = (width / height) * maxSide;
+      }
+    }
+    
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    
     const ctx = canvas.getContext('2d');
     if (ctx) {
-      ctx.drawImage(videoRef.current, 0, 0);
+      ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
       canvas.toBlob((blob) => {
         if (blob) {
           const file = new File([blob], `receipt_${Date.now()}.jpg`, { type: 'image/jpeg' });
           onCapture(file);
           setCapturedCount(prev => prev + 1);
         }
-      }, 'image/jpeg', 0.9);
+      }, 'image/jpeg', 0.8);
     }
   };
 

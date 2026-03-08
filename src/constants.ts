@@ -1,6 +1,10 @@
-export const CATEGORIES = ['立替', '預かり金'] as const;
+export const CATEGORIES = ['飲食', '交通', '備品', 'その他'] as const;
+export const DEFAULT_CATEGORY = 'その他';
 
-export const DEFAULT_CATEGORY = '立替';
+export const RECEIPT_TYPES = {
+  advance: '立替金',
+  deposit: '預かり金'
+} as const;
 
 export const COLORS = {
   PRIMARY: '#003366', // サブスクカート風ネイビー
@@ -21,7 +25,8 @@ export const AI_CONFIG = {
 - 日付 (YYYY-MM-DD形式)
 - 店舗名 (または発行元)
 - 合計金額 (数値のみ)
-- カテゴリー (「立替」または「預かり金」から選択)
+- type (「advance」(立替金) または 「deposit」(預かり金) から選択。通常の買い物はadvance、返金や入金はdeposit)
+- カテゴリー (「飲食」「交通」「備品」「その他」から選択)
 - 備考 (購入した主要な商品名など)
 
 【重要】
@@ -29,5 +34,5 @@ export const AI_CONFIG = {
 - 金額がどうしても不明な場合は 0 を返してください。
 - 日付が不明な場合は、今日の日付（2026-03-08）を返してください。
 - 店舗名が不明な場合は「不明」と返してください。
-- 決してエラーで中断せず、可能な限りJSON形式で結果を返してください。`,
+- 決してエラーで中断せず、必ず指定されたJSON形式で結果を返してください。`,
 };

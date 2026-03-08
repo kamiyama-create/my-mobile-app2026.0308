@@ -1,5 +1,5 @@
 {
-  "name": "経費申請アシスタント",
-  "description": "レシート画像から経費データを自動抽出し、Googleスプレッドシートへ送信するアシスタントです。",
+  "name": "ReceiptScan for サブスクカート",
+  "description": "レシートを撮影するだけで立替金・預かり金をAIが自動判別し、Googleスプレッドシートへ即座に同期する精算アシスタントです。",
   "requestFramePermissions": ["camera"]
 }

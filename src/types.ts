@@ -1,4 +1,5 @@
 export type ReceiptStatus = 'pending' | 'sent' | 'error';
+export type ReceiptType = 'advance' | 'deposit';
 
 export interface ReceiptData {
   id: string;
@@ -6,6 +7,7 @@ export interface ReceiptData {
   store_name: string;
   amount: number;
   category: string;
+  type: ReceiptType;
   note: string;
   status: ReceiptStatus;
   timestamp: number;

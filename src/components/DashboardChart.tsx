@@ -28,7 +28,7 @@ interface DashboardChartProps {
   data: {
     date: string;
     amount: number;
-    category: string;
+    type: 'advance' | 'deposit';
   }[];
 }
 
@@ -36,26 +36,43 @@ export const DashboardChart: React.FC<DashboardChartProps> = ({ data }) => {
   // 日付順にソート
   const sortedData = [...data].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   
-  // 日付ごとの合計金額を算出
-  const dailyTotals = sortedData.reduce((acc, curr) => {
-    acc[curr.date] = (acc[curr.date] || 0) + curr.amount;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const labels = Object.keys(dailyTotals);
-  const values = Object.values(dailyTotals);
+  // ユニークな日付のリストを作成
+  const labels = Array.from(new Set(sortedData.map(d => d.date))).sort();
+  
+  // 日付ごとの合計金額を算出（タイプ別）
+  const advanceData = labels.map(date => 
+    sortedData.filter(d => d.date === date && d.type === 'advance')
+      .reduce((sum, curr) => sum + curr.amount, 0)
+  );
+  
+  const depositData = labels.map(date => 
+    sortedData.filter(d => d.date === date && d.type === 'deposit')
+      .reduce((sum, curr) => sum + curr.amount, 0)
+  );
 
   const chartData = {
     labels,
     datasets: [
       {
-        label: '支出推移 (¥)',
-        data: values,
+        label: '立替金 (¥)',
+        data: advanceData,
         borderColor: COLORS.SECONDARY,
         backgroundColor: `${COLORS.SECONDARY}22`,
         fill: true,
         tension: 0.4,
         pointBackgroundColor: COLORS.SECONDARY,
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        pointRadius: 4,
+      },
+      {
+        label: '預かり金 (¥)',
+        data: depositData,
+        borderColor: COLORS.PRIMARY,
+        backgroundColor: `${COLORS.PRIMARY}22`,
+        fill: true,
+        tension: 0.4,
+        pointBackgroundColor: COLORS.PRIMARY,
         pointBorderColor: '#fff',
         pointBorderWidth: 2,
         pointRadius: 4,
@@ -68,7 +85,15 @@ export const DashboardChart: React.FC<DashboardChartProps> = ({ data }) => {
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        display: false,
+        display: true,
+        position: 'top' as const,
+        align: 'end' as const,
+        labels: {
+          boxWidth: 8,
+          usePointStyle: true,
+          pointStyle: 'circle',
+          font: { size: 10, weight: 'bold' as const }
+        }
       },
       tooltip: {
         backgroundColor: COLORS.PRIMARY,
@@ -76,7 +101,6 @@ export const DashboardChart: React.FC<DashboardChartProps> = ({ data }) => {
         bodyFont: { size: 14 },
         padding: 12,
         cornerRadius: 8,
-        displayColors: false,
       },
     },
     scales: {

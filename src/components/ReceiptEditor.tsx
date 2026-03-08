@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { X, Save, Trash2, Send } from 'lucide-react';
 import { motion } from 'motion/react';
-import { ReceiptData } from '../types';
-import { CATEGORIES } from '../constants';
+import { ReceiptData, ReceiptType } from '../types';
+import { CATEGORIES, RECEIPT_TYPES } from '../constants';
 
 interface ReceiptEditorProps {
   receipt: ReceiptData;
@@ -39,6 +39,23 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({ receipt, onSave, o
         </div>
 
         <div className="space-y-6">
+          {/* Type Toggle */}
+          <div className="flex bg-stone-100 p-1 rounded-2xl">
+            {(Object.keys(RECEIPT_TYPES) as ReceiptType[]).map((type) => (
+              <button
+                key={type}
+                onClick={() => setEdited(prev => ({ ...prev, type }))}
+                className={`flex-1 py-3 rounded-xl font-bold transition-all ${
+                  edited.type === type 
+                    ? 'bg-white text-[#003366] shadow-sm' 
+                    : 'text-stone-400 hover:text-stone-600'
+                }`}
+              >
+                {RECEIPT_TYPES[type]}
+              </button>
+            ))}
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-xs font-bold text-stone-400 uppercase tracking-wider">日付</label>
