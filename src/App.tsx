@@ -21,6 +21,7 @@ import { ReceiptEditor } from './components/ReceiptEditor';
 import { Toast } from './components/Toast';
 import { DashboardChart } from './components/DashboardChart';
 
+// Trigger build to apply environment variables (VITE_GAS_URL, VITE_GEMINI_API_KEY)
 const App: React.FC = () => {
   const [showScanner, setShowScanner] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
