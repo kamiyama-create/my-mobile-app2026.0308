@@ -34,7 +34,7 @@ const STORAGE_KEY_GAS_URL = 'gas_endpoint_url';
 
 // 画像をリサイズしてBase64を直接返す（高速化のため）
 const getResizedBase64 = (file: File, maxSide: number, quality: number): Promise<{ base64: string; type: string }> => {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
@@ -70,6 +70,10 @@ const getResizedBase64 = (file: File, maxSide: number, quality: number): Promise
         base64: dataUrl.split(',')[1],
         type: 'image/jpeg'
       });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('画像の読み込みに失敗しました'));
     };
     img.src = url;
   });
@@ -145,30 +149,39 @@ export default function App() {
         contents: {
           parts: [
             { inlineData: { data: base64Data, mimeType } },
-            { text: `JSON: {date, store_name, amount, category:"立替"|"預かり金", note}` }
+            { text: `レシートまたは領収書を解析して、日付、店舗名、合計金額、カテゴリー、備考を抽出してください。
+不明な項目がある場合は、空文字または0（金額の場合）を返してください。
+カテゴリーは「立替」または「預かり金」のいずれかを選択してください。デフォルトは「立替」です。` }
           ]
         },
         config: {
-          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              date: { type: Type.STRING },
-              store_name: { type: Type.STRING },
-              amount: { type: Type.NUMBER },
-              category: { type: Type.STRING, enum: ["立替", "預かり金"] },
-              note: { type: Type.STRING },
+              date: { type: Type.STRING, description: "YYYY-MM-DD形式の日付" },
+              store_name: { type: Type.STRING, description: "店舗名または発行元" },
+              amount: { type: Type.NUMBER, description: "合計金額（数値のみ）" },
+              category: { type: Type.STRING, enum: ["立替", "預かり金"], description: "費用の種類" },
+              note: { type: Type.STRING, description: "補足情報（商品名など）" },
             },
             required: ["date", "store_name", "amount", "category", "note"]
           }
         }
       });
 
-      const result = JSON.parse(response.text || '{}');
+      if (!response.text) {
+        throw new Error('Empty response from AI');
+      }
+
+      const result = JSON.parse(response.text);
       const newEntry: ReceiptData = {
         id: crypto.randomUUID(),
-        ...result,
+        date: result.date || new Date().toISOString().split('T')[0],
+        store_name: result.store_name || '不明な店舗',
+        amount: Number(result.amount) || 0,
+        category: result.category || '立替',
+        note: result.note || '',
         status: 'pending',
         timestamp: Date.now()
       };
@@ -179,10 +192,16 @@ export default function App() {
       // 自動送信はせず、確認画面を表示する
       setCurrentReceipt(newEntry);
       
-      showToast(`${result.store_name}を解析しました。内容を確認して送信してください。`, 'success');
+      showToast(`${newEntry.store_name}を解析しました。内容を確認して送信してください。`, 'success');
     } catch (error) {
       console.error('Analysis error:', error);
-      showToast('解析に失敗しました。もう一度お試しください。', 'error');
+      // エラーメッセージをより詳細に
+      const errorMessage = error instanceof Error ? error.message : '不明なエラー';
+      if (errorMessage.includes('API_KEY')) {
+        showToast('APIキーの設定を確認してください。', 'error');
+      } else {
+        showToast('解析に失敗しました。画像が不鮮明な可能性があります。', 'error');
+      }
     } finally {
       setProcessingItems(prev => prev.filter(id => id !== processingId));
     }
