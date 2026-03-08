@@ -1,7 +1,7 @@
 export const CATEGORIES = ['飲食', '交通', '備品', 'その他'] as const;
 export const DEFAULT_CATEGORY = 'その他';
 
-export const GAS_URL = 'https://script.google.com/macros/s/AKfycbwg8AEiXRb6iNahfhrRaF5Z_60yrKjRSXDd8RNjHToXF-1uqQlcbSWTbr_-JXpn3cbo/exec';
+export const GAS_URL = 'https://script.google.com/macros/s/AKfycbyMw46jaXii5QCGsAlK9_O4kbFXyVeUvJ_mjWmf3Fl_0BDEgFE0OW1JMEDnsgNo2XSa/exec';
 export const GEMINI_API_KEY = 'AIzaSyCrvJ0Mu86O2KxRzjZz8p37BeIoWc3e79g';
 
 export const RECEIPT_TYPES = {
