@@ -1,6 +1,9 @@
 export const CATEGORIES = ['飲食', '交通', '備品', 'その他'] as const;
 export const DEFAULT_CATEGORY = 'その他';
 
+export const GAS_URL = 'https://script.google.com/macros/s/AKfycbwg8AEiXRb6iNahfhrRaF5Z_60yrKjRSXDd8RNjHToXF-1uqQlcBSWTbr_-JXpn3cbo/exec';
+export const GEMINI_API_KEY = ' AIzaSyCrvJ0Mu86O2KxRzjZz8p37BeIoWc3e79g'|| (typeof process !== 'undefined' ? process.env.VITE_GEMINI_API_KEY : undefined) || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : undefined);
+
 export const RECEIPT_TYPES = {
   advance: '立替金',
   deposit: '預かり金'

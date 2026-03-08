@@ -1,16 +1,14 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { AI_CONFIG } from "../constants";
+import { AI_CONFIG, GEMINI_API_KEY } from "../constants";
 import { ReceiptData } from "../types";
 
 export const analyzeReceiptImage = async (base64Data: string, mimeType: string): Promise<Partial<ReceiptData>> => {
-  // AI Studio環境とVercel環境の両方に対応
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-  
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY (または VITE_GEMINI_API_KEY) が設定されていません。Vercelの環境変数を確認してください。');
+  if (!GEMINI_API_KEY) {
+    console.error('【設定エラー】GEMINI_API_KEY が定義されていません。src/constants.ts を確認してください。');
+    throw new Error('GEMINI_API_KEY が設定されていません。');
   }
 
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
   const response = await ai.models.generateContent({
     model: AI_CONFIG.MODEL_NAME,
     contents: {

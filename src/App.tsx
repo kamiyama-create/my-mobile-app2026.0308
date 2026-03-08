@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 
 // Types & Constants
 import { ReceiptData } from './types';
-import { IMAGE_CONFIG, COLORS } from './constants';
+import { IMAGE_CONFIG, COLORS, GAS_URL } from './constants';
 
 // Utils & Services
 import { getResizedBase64 } from './utils/imageUtils';
@@ -41,15 +41,15 @@ const App: React.FC = () => {
 
   // スプレッドシート同期 (GAS)
   const syncWithSpreadsheet = async () => {
-    const gasUrl = import.meta.env.VITE_GAS_URL;
-    if (!gasUrl) {
+    if (!GAS_URL) {
+      console.error('【設定エラー】GAS_URL が定義されていません。src/constants.ts を確認してください。');
       showToast('GASのWebアプリURLが設定されていません。', 'error');
       return;
     }
 
     setIsSyncing(true);
     try {
-      const res = await fetch(`${gasUrl}?action=read`);
+      const res = await fetch(`${GAS_URL}?action=read`);
       if (!res.ok) throw new Error('Read failed');
       const data = await res.json();
       
@@ -82,14 +82,14 @@ const App: React.FC = () => {
   };
 
   const sendToSpreadsheet = async (receipt: ReceiptData) => {
-    const gasUrl = import.meta.env.VITE_GAS_URL;
-    if (!gasUrl) {
+    if (!GAS_URL) {
+      console.error('【設定エラー】GAS_URL が定義されていません。src/constants.ts を確認してください。');
       showToast('GASのWebアプリURLが設定されていません。', 'error');
       return false;
     }
 
     try {
-      const res = await fetch(gasUrl, {
+      const res = await fetch(GAS_URL, {
         method: 'POST',
         mode: 'no-cors', // GASのCORS制限回避のため
         headers: { 'Content-Type': 'application/json' },
