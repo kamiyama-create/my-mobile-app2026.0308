@@ -39,23 +39,23 @@ export const HistoryList: React.FC<HistoryListProps> = ({ items, processingIds, 
           onClick={() => onSelect(item)}
           className="w-full text-left bg-white p-5 rounded-3xl shadow-sm border border-stone-100 hover:border-emerald-200 hover:shadow-md transition-all group flex items-center gap-4"
         >
-          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${item.status === 'sent' ? 'bg-emerald-50 text-emerald-600' : 'bg-stone-50 text-stone-600'}`}>
+          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${item.status === 'sent' ? 'bg-blue-50 text-[#003366]' : 'bg-stone-50 text-stone-600'}`}>
             <Store size={24} />
           </div>
           
           <div className="flex-1 min-w-0">
             <div className="flex justify-between items-start mb-1">
               <h3 className="font-bold text-stone-800 truncate">{item.store_name}</h3>
-              <span className="font-mono font-bold text-stone-900">¥{item.amount.toLocaleString()}</span>
+              <span className="font-mono font-bold text-[#003366]">¥{item.amount.toLocaleString()}</span>
             </div>
             <div className="flex items-center gap-3 text-xs text-stone-400">
               <span className="flex items-center gap-1"><Clock size={12} /> {item.date}</span>
               <span className="flex items-center gap-1"><Tag size={12} /> {item.category}</span>
-              {item.status === 'sent' && <span className="text-emerald-500 font-bold">送信済み</span>}
+              {item.status === 'sent' && <span className="text-[#FF9900] font-bold">送信済み</span>}
             </div>
           </div>
           
-          <ChevronRight size={20} className="text-stone-300 group-hover:text-emerald-500 transition-colors" />
+          <ChevronRight size={20} className="text-stone-300 group-hover:text-[#FF9900] transition-colors" />
         </button>
       ))}
     </div>

@@ -32,9 +32,9 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({ receipt, onSave, o
         onClick={e => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-8">
-          <h2 className="text-2xl font-bold text-stone-800">内容の確認</h2>
-          <button onClick={onClose} className="p-2 hover:bg-stone-200 rounded-full transition-colors">
-            <X size={24} />
+          <h2 className="text-2xl font-black text-[#003366]">内容の確認</h2>
+          <button onClick={onClose} className="p-3 bg-stone-100 text-stone-400 rounded-2xl hover:bg-stone-200 transition-colors">
+            <X size={20} />
           </button>
         </div>
 
@@ -81,9 +81,19 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({ receipt, onSave, o
                 <button
                   key={cat}
                   onClick={() => setEdited(prev => ({ ...prev, category: cat }))}
-                  className={`flex-1 p-4 rounded-2xl font-bold transition-all ${edited.category === cat ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-white text-stone-400 hover:bg-stone-100'}`}
+                  className={`flex-1 p-4 rounded-2xl font-bold transition-all relative overflow-hidden ${
+                    edited.category === cat 
+                      ? 'text-white shadow-lg shadow-orange-500/30 border border-orange-600' 
+                      : 'bg-white text-stone-400 hover:bg-stone-100 border border-stone-100'
+                  }`}
+                  style={edited.category === cat ? {
+                    background: 'linear-gradient(to bottom, #FFB84D 0%, #FF9900 100%)',
+                  } : {}}
                 >
-                  {cat}
+                  {edited.category === cat && (
+                    <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent pointer-events-none" />
+                  )}
+                  <span className="relative z-10">{cat}</span>
                 </button>
               ))}
             </div>
@@ -104,21 +114,26 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({ receipt, onSave, o
         <div className="grid grid-cols-3 gap-4 mt-10">
           <button 
             onClick={() => { onDelete(receipt.id); onClose(); }}
-            className="p-4 rounded-2xl bg-rose-50 text-rose-600 font-bold flex items-center justify-center gap-2 hover:bg-rose-100 transition-colors"
+            className="p-4 rounded-2xl bg-rose-50 text-rose-600 font-bold flex items-center justify-center gap-2 hover:bg-rose-100 transition-colors border border-rose-100"
           >
             <Trash2 size={20} />
           </button>
           <button 
             onClick={() => handleSave('pending')}
-            className="p-4 rounded-2xl bg-stone-200 text-stone-600 font-bold flex items-center justify-center gap-2 hover:bg-stone-300 transition-colors"
+            className="p-4 rounded-2xl bg-white text-stone-600 font-bold flex items-center justify-center gap-2 hover:bg-stone-50 transition-colors border border-stone-200 shadow-sm"
           >
             <Save size={20} /> 保存
           </button>
           <button 
             onClick={() => handleSave('sent')}
-            className="p-4 rounded-2xl bg-emerald-600 text-white font-bold flex items-center justify-center gap-2 hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200"
+            className="p-4 rounded-2xl text-white font-bold flex items-center justify-center gap-2 shadow-xl shadow-blue-900/20 relative overflow-hidden active:scale-95 transition-all border border-[#00264d]"
+            style={{
+              background: 'linear-gradient(to bottom, #004d99 0%, #003366 100%)',
+            }}
           >
-            <Send size={20} /> 送信
+            <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
+            <Send size={20} className="relative z-10" />
+            <span className="relative z-10">送信</span>
           </button>
         </div>
       </div>

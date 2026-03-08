@@ -47,6 +47,7 @@ export const useReceipts = () => {
     updateReceipt,
     deleteReceipt,
     startProcessing,
-    endProcessing
+    endProcessing,
+    setHistory
   };
 };
