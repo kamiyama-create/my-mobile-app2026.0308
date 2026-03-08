@@ -13,21 +13,54 @@ export const Scanner: React.FC<ScannerProps> = ({ onCapture, onClose, isProcessi
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [capturedCount, setCapturedCount] = useState(0);
 
+  const [cameraError, setCameraError] = useState<string | null>(null);
+
   const startCamera = useCallback(async () => {
+    setCameraError(null);
     try {
+      // ブラウザのサポートチェック
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("BROWSER_NOT_SUPPORTED");
+      }
+
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+        video: { 
+          facingMode: 'environment', 
+          width: { ideal: 1920 }, 
+          height: { ideal: 1080 } 
+        },
         audio: false
       });
+      
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
       }
       setStream(mediaStream);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Camera error:", err);
-      alert("カメラの起動に失敗しました。ブラウザの設定を確認してください。");
+      
+      let message = "カメラを起動できませんでした。";
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        message = "カメラの使用が許可されていません。ブラウザの設定でカメラへのアクセスを許可してください。";
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        message = "カメラが見つかりませんでした。デバイスにカメラが接続されているか確認してください。";
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        message = "カメラが他のアプリで使用されている可能性があります。他のタブやアプリを閉じてから再試行してください。";
+      } else if (err.message === "BROWSER_NOT_SUPPORTED") {
+        message = "お使いのブラウザはカメラ機能をサポートしていません。最新のSafariやChromeをお試しください。";
+      }
+      
+      setCameraError(message);
     }
   }, []);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      onCapture(file);
+      onClose();
+    }
+  };
 
   React.useEffect(() => {
     startCamera();
@@ -85,21 +118,58 @@ export const Scanner: React.FC<ScannerProps> = ({ onCapture, onClose, isProcessi
       className="fixed inset-0 z-50 bg-black flex flex-col"
     >
       <div className="relative flex-1 flex items-center justify-center overflow-hidden">
-        <video 
-          ref={videoRef} 
-          autoPlay 
-          playsInline 
-          className="absolute inset-0 w-full h-full object-cover"
-        />
-        
-        {/* ガイド枠 */}
-        <div className="relative z-10 w-4/5 aspect-[3/4] border-2 border-dashed border-white/50 rounded-2xl shadow-[0_0_0_100vmax_rgba(0,0,0,0.5)]">
-          <div className="absolute -top-12 left-0 right-0 text-center">
-            <span className="bg-[#FF9900] text-white px-4 py-1 rounded-full text-sm font-bold shadow-lg">
-              {capturedCount > 0 ? `${capturedCount}枚 撮影済み` : 'レシートを枠に合わせてください'}
-            </span>
+        {cameraError ? (
+          <div className="absolute inset-0 z-40 bg-stone-900 flex flex-col items-center justify-center p-8 text-center">
+            <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mb-6">
+              <X size={32} className="text-red-500" />
+            </div>
+            <h3 className="text-white text-lg font-bold mb-2">カメラを起動できません</h3>
+            <p className="text-white/60 text-sm mb-8 leading-relaxed">
+              {cameraError}
+            </p>
+            <div className="flex flex-col gap-4 w-full max-w-xs">
+              <button 
+                onClick={startCamera}
+                className="w-full py-4 bg-[#FF9900] text-white rounded-2xl font-bold shadow-lg active:scale-95 transition-all"
+              >
+                再試行する
+              </button>
+              <label className="w-full py-4 bg-white/10 text-white rounded-2xl font-bold border border-white/20 active:scale-95 transition-all cursor-pointer">
+                ライブラリから写真を選択
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  className="hidden" 
+                  onChange={handleFileUpload}
+                />
+              </label>
+              <button 
+                onClick={onClose}
+                className="w-full py-4 text-white/40 font-bold"
+              >
+                キャンセル
+              </button>
+            </div>
           </div>
-        </div>
+        ) : (
+          <video 
+            ref={videoRef} 
+            autoPlay 
+            playsInline 
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        )}
+        
+        {/* ガイド枠 (エラーがない場合のみ表示) */}
+        {!cameraError && (
+          <div className="relative z-10 w-4/5 aspect-[3/4] border-2 border-dashed border-white/50 rounded-2xl shadow-[0_0_0_100vmax_rgba(0,0,0,0.5)]">
+            <div className="absolute -top-12 left-0 right-0 text-center">
+              <span className="bg-[#FF9900] text-white px-4 py-1 rounded-full text-sm font-bold shadow-lg">
+                {capturedCount > 0 ? `${capturedCount}枚 撮影済み` : 'レシートを枠に合わせてください'}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* エラー表示 */}
         <AnimatePresence>
