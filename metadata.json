@@ -1,0 +1,5 @@
+{
+  "name": "経費申請アシスタント",
+  "description": "レシート画像から経費データを自動抽出し、Googleスプレッドシートへ送信するアシスタントです。",
+  "requestFramePermissions": ["camera"]
+}
