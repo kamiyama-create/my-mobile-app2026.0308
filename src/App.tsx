@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Camera, Plus, History, Settings, LogOut, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -22,9 +22,32 @@ import { Toast } from './components/Toast';
 import { DashboardChart } from './components/DashboardChart';
 
 // Trigger build to apply environment variables (VITE_GAS_URL, VITE_GEMINI_API_KEY)
+const VERSION = "2026-03-08 08:50 DEBUG";
+console.log('App.tsx file loaded, version:', VERSION);
+
 const App: React.FC = () => {
+  const [bootError, setBootError] = useState<string | null>(null);
+  
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      setBootError(`Runtime Error: ${event.message}`);
+    };
+    window.addEventListener('error', handleError);
+    return () => window.removeEventListener('error', handleError);
+  }, []);
+
+  console.log('App component rendering, version:', VERSION);
+  
   const [showScanner, setShowScanner] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  useEffect(() => {
+    console.log('App component mounted, version:', VERSION);
+    // Global access for debugging
+    (window as any).debugSync = syncWithSpreadsheet;
+    (window as any).debugGAS_URL = GAS_URL;
+    (window as any).appVersion = VERSION;
+  }, []);
   const { 
     history, 
     currentReceipt, 
@@ -41,6 +64,9 @@ const App: React.FC = () => {
 
   // スプレッドシート同期 (GAS)
   const syncWithSpreadsheet = async () => {
+    console.log('--- Sync Start ---');
+    console.log('Target GAS_URL:', GAS_URL);
+
     if (!GAS_URL) {
       console.error('【設定エラー】GAS_URL が定義されていません。src/constants.ts を確認してください。');
       showToast('GASのWebアプリURLが設定されていません。', 'error');
@@ -49,9 +75,19 @@ const App: React.FC = () => {
 
     setIsSyncing(true);
     try {
-      const res = await fetch(`${GAS_URL}?action=read`);
-      if (!res.ok) throw new Error('Read failed');
+      const fetchUrl = `${GAS_URL}?action=read`;
+      console.log('Fetching data from:', fetchUrl);
+      
+      const res = await fetch(fetchUrl);
+      console.log('Fetch response status:', res.status, res.statusText);
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`HTTP Error: ${res.status} ${res.statusText} - ${errorText}`);
+      }
+
       const data = await res.json();
+      console.log('Data received from GAS:', data);
       
       if (data && Array.isArray(data)) {
         const syncedData: ReceiptData[] = data.map((row: any) => ({
@@ -72,16 +108,28 @@ const App: React.FC = () => {
           return [...newData, ...prev];
         });
         showToast('スプレッドシートからデータを取得しました。', 'success');
+      } else {
+        console.warn('Received data is not an array:', data);
       }
     } catch (err) {
-      console.error('Sync error:', err);
-      showToast('同期に失敗しました。URLを確認してください。', 'error');
+      console.error('--- Sync Error Details ---');
+      console.error('Error object:', err);
+      if (err instanceof Error) {
+        console.error('Error message:', err.message);
+        console.error('Stack trace:', err.stack);
+      }
+      showToast('同期に失敗しました。コンソールを確認してください。', 'error');
     } finally {
       setIsSyncing(false);
+      console.log('--- Sync End ---');
     }
   };
 
   const sendToSpreadsheet = async (receipt: ReceiptData) => {
+    console.log('--- Send Start ---');
+    console.log('Target GAS_URL:', GAS_URL);
+    console.log('Receipt data to send:', receipt);
+
     if (!GAS_URL) {
       console.error('【設定エラー】GAS_URL が定義されていません。src/constants.ts を確認してください。');
       showToast('GASのWebアプリURLが設定されていません。', 'error');
@@ -89,40 +137,54 @@ const App: React.FC = () => {
     }
 
     try {
+      const payload = {
+        action: 'append',
+        data: {
+          id: receipt.id,
+          date: receipt.date,
+          store_name: receipt.store_name,
+          amount: receipt.amount,
+          type: receipt.type,
+          category: receipt.category,
+          note: receipt.note,
+          timestamp: receipt.timestamp
+        }
+      };
+      console.log('Sending payload:', payload);
+
       const res = await fetch(GAS_URL, {
         method: 'POST',
         mode: 'no-cors', // GASのCORS制限回避のため
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'append',
-          data: {
-            id: receipt.id,
-            date: receipt.date,
-            store_name: receipt.store_name,
-            amount: receipt.amount,
-            type: receipt.type,
-            category: receipt.category,
-            note: receipt.note,
-            timestamp: receipt.timestamp
-          }
-        })
+        body: JSON.stringify(payload)
       });
-      // no-cors の場合、res.ok は常に false になるが、送信自体は成功している可能性がある
-      // ユーザー体験を優先し、エラーが出なければ成功とみなす
+      
+      console.log('Fetch completed (mode: no-cors). Response type:', res.type);
+      // no-cors の場合、成功しても不透明なレスポンスが返るため、エラーが出なければ成功とみなす
       return true;
     } catch (e) {
-      console.error('Append failed', e);
+      console.error('--- Send Error Details ---');
+      console.error('Error object:', e);
       return false;
+    } finally {
+      console.log('--- Send End ---');
     }
   };
 
   const handleCapture = async (file: File) => {
+    console.log('--- Capture Start ---');
+    console.log('File received:', file.name, file.size, file.type);
+    
     const processingId = crypto.randomUUID();
     startProcessing(processingId);
     
     try {
+      console.log('Resizing image...');
       const { base64, type } = await getResizedBase64(file, IMAGE_CONFIG.MAX_SIDE, IMAGE_CONFIG.QUALITY);
+      console.log('Image resized. Analyzing with Gemini...');
+      
       const result = await analyzeReceiptImage(base64, type);
+      console.log('Gemini analysis result:', result);
 
       const newEntry: ReceiptData = {
         id: crypto.randomUUID(),
@@ -160,6 +222,11 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-stone-50 font-sans text-stone-900 pb-32">
+      {/* Debug Banner */}
+      <div className={`text-white text-[10px] py-1 px-4 text-center font-bold sticky top-0 z-[100] ${bootError ? 'bg-black' : 'bg-red-600'}`}>
+        {bootError || `DEBUG MODE: ${VERSION} | GAS_URL: ${GAS_URL ? 'SET' : 'MISSING'}`}
+      </div>
+
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-md sticky top-0 z-30 border-b border-stone-100">
         <div className="max-w-2xl mx-auto px-6 py-6 flex justify-between items-center">
@@ -169,10 +236,14 @@ const App: React.FC = () => {
           </div>
           <div className="flex gap-2">
             <button 
-              onClick={syncWithSpreadsheet}
+              id="sync-button"
+              onClick={(e) => {
+                console.log('Sync button clicked! Event:', e);
+                syncWithSpreadsheet();
+              }}
               disabled={isSyncing}
               title="スプレッドシート同期" 
-              className={`p-3 bg-stone-50 text-stone-400 rounded-2xl hover:bg-stone-100 transition-all ${isSyncing ? 'animate-spin text-[#FF9900]' : ''}`}
+              className={`p-3 bg-stone-100 text-stone-600 rounded-2xl hover:bg-stone-200 transition-all z-50 ${isSyncing ? 'animate-spin text-[#FF9900]' : 'active:scale-90'}`}
             >
               <RefreshCw size={20} />
             </button>
@@ -250,8 +321,12 @@ const App: React.FC = () => {
       {/* Floating Action Buttons */}
       <div className="fixed bottom-10 left-0 right-0 flex justify-center items-center gap-6 z-40 px-6">
         <button 
-          onClick={() => setShowScanner(true)}
-          className="w-20 h-20 text-white rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group overflow-hidden relative"
+          id="camera-button"
+          onClick={(e) => {
+            console.log('Camera button clicked! Event:', e);
+            setShowScanner(true);
+          }}
+          className="w-20 h-20 text-white rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group overflow-hidden relative z-50"
           style={{
             background: 'linear-gradient(to bottom, #FFB84D 0%, #FF9900 100%)',
             boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), 0 15px 30px rgba(255,153,0,0.3)',
