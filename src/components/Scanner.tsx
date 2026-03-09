@@ -2,6 +2,8 @@ import React, { useRef, useState, useCallback } from 'react';
 import { Camera, X, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
+import { IMAGE_CONFIG } from '../constants';
+
 interface ScannerProps {
   onCapture: (file: File) => void;
   onClose: () => void;
@@ -80,7 +82,7 @@ export const Scanner: React.FC<ScannerProps> = ({ onCapture, onClose, isProcessi
     const height = video.videoHeight || video.clientHeight;
     
     // 最大サイズを制限してメモリ負荷を軽減
-    const maxSide = 1280;
+    const maxSide = IMAGE_CONFIG.MAX_SIDE;
     let targetWidth = width;
     let targetHeight = height;
     
@@ -106,7 +108,7 @@ export const Scanner: React.FC<ScannerProps> = ({ onCapture, onClose, isProcessi
           onCapture(file);
           setCapturedCount(prev => prev + 1);
         }
-      }, 'image/jpeg', 0.8);
+      }, 'image/jpeg', IMAGE_CONFIG.QUALITY);
     }
   };
 

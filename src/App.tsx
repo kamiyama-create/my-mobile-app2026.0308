@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 
 // Types & Constants
 import { ReceiptData } from './types';
-import { IMAGE_CONFIG, COLORS, GAS_URL } from './constants';
+import { IMAGE_CONFIG, COLORS, GAS_URL, GEMINI_API_KEY } from './constants';
 
 // Utils & Services
 import { getResizedBase64 } from './utils/imageUtils';
@@ -22,32 +22,12 @@ import { Toast } from './components/Toast';
 import { DashboardChart } from './components/DashboardChart';
 
 // Trigger build to apply environment variables (VITE_GAS_URL, VITE_GEMINI_API_KEY)
-const VERSION = "2026-03-08 08:50 DEBUG";
-console.log('App.tsx file loaded, version:', VERSION);
-
+// Version: 2026-03-09 15:22
 const App: React.FC = () => {
-  const [bootError, setBootError] = useState<string | null>(null);
-  
-  useEffect(() => {
-    const handleError = (event: ErrorEvent) => {
-      setBootError(`Runtime Error: ${event.message}`);
-    };
-    window.addEventListener('error', handleError);
-    return () => window.removeEventListener('error', handleError);
-  }, []);
-
-  console.log('App component rendering, version:', VERSION);
-  
   const [showScanner, setShowScanner] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [manualApiKey, setManualApiKey] = useState(localStorage.getItem('manual_api_key') || '');
   const [isSyncing, setIsSyncing] = useState(false);
-
-  useEffect(() => {
-    console.log('App component mounted, version:', VERSION);
-    // Global access for debugging
-    (window as any).debugSync = syncWithSpreadsheet;
-    (window as any).debugGAS_URL = GAS_URL;
-    (window as any).appVersion = VERSION;
-  }, []);
   const { 
     history, 
     currentReceipt, 
@@ -78,7 +58,12 @@ const App: React.FC = () => {
       const fetchUrl = `${GAS_URL}?action=read`;
       console.log('Fetching data from:', fetchUrl);
       
-      const res = await fetch(fetchUrl);
+      const res = await fetch(fetchUrl, {
+        method: 'GET',
+        mode: 'cors',
+        credentials: 'omit',
+        redirect: 'follow'
+      });
       console.log('Fetch response status:', res.status, res.statusText);
 
       if (!res.ok) {
@@ -94,7 +79,7 @@ const App: React.FC = () => {
           id: row.id,
           date: row.date,
           store_name: row.store_name,
-          amount: Number(row.amount),
+          amount: Number(row.amount) || 0,
           type: row.type as any,
           category: row.category,
           note: row.note,
@@ -154,13 +139,17 @@ const App: React.FC = () => {
 
       const res = await fetch(GAS_URL, {
         method: 'POST',
-        mode: 'no-cors', // GASのCORS制限回避のため
-        headers: { 'Content-Type': 'application/json' },
+        mode: 'cors',
+        credentials: 'omit',
+        redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
       });
       
-      console.log('Fetch completed (mode: no-cors). Response type:', res.type);
-      // no-cors の場合、成功しても不透明なレスポンスが返るため、エラーが出なければ成功とみなす
+      console.log('Fetch completed. Response status:', res.status);
+      if (!res.ok) {
+        throw new Error(`HTTP Error: ${res.status}`);
+      }
       return true;
     } catch (e) {
       console.error('--- Send Error Details ---');
@@ -173,26 +162,29 @@ const App: React.FC = () => {
 
   const handleCapture = async (file: File) => {
     console.log('--- Capture Start ---');
-    console.log('File received:', file.name, file.size, file.type);
     
     const processingId = crypto.randomUUID();
     startProcessing(processingId);
     
     try {
-      console.log('Resizing image...');
       const { base64, type } = await getResizedBase64(file, IMAGE_CONFIG.MAX_SIDE, IMAGE_CONFIG.QUALITY);
-      console.log('Image resized. Analyzing with Gemini...');
       
-      const result = await analyzeReceiptImage(base64, type);
-      console.log('Gemini analysis result:', result);
+      // GEMINI_API_KEY または manualApiKey を使用
+      const activeKey = manualApiKey || GEMINI_API_KEY;
+      
+      if (!activeKey) {
+        throw new Error('MISSING_API_KEY');
+      }
 
+      const result = await analyzeReceiptImage(base64, type, activeKey);
+      
       const newEntry: ReceiptData = {
         id: crypto.randomUUID(),
         date: result.date || new Date().toISOString().split('T')[0],
         store_name: result.store_name || '不明な店舗',
         amount: Number(result.amount) || 0,
-        type: (result.type as any) || 'advance',
-        category: result.category || 'その他',
+        type: (result.type === 'deposit' ? 'deposit' : 'advance'),
+        category: (['飲食', '交通', '備品', 'その他'].includes(result.category || '') ? result.category! : 'その他'),
         note: result.note || '',
         status: 'pending',
         timestamp: Date.now()
@@ -201,19 +193,25 @@ const App: React.FC = () => {
       addReceipt(newEntry);
       setCurrentReceipt(newEntry);
       showToast(`${newEntry.store_name}を解析しました。`, 'success');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Analysis error:', error);
-      showToast('解析に失敗しました。もう一度撮影し直すか、手動で入力してください。', 'error');
+      let message = '解析に失敗しました。もう一度撮影し直すか、手動で入力してください。';
+      if (error?.message === 'MISSING_API_KEY' || error?.message?.includes('API_KEY')) {
+        message = 'APIキーが設定されていません。設定メニューから手動で入力するか、PCのSecrets設定を確認してください。';
+        setShowSettings(true); // キーがない場合は設定を開く
+      }
+      showToast(message, 'error');
     } finally {
       endProcessing(processingId);
     }
   };
 
   const totals = history.reduce((acc, item) => {
+    const amount = Number(item.amount) || 0;
     if (item.type === 'advance') {
-      acc.advance += item.amount;
+      acc.advance += amount;
     } else {
-      acc.deposit += item.amount;
+      acc.deposit += amount;
     }
     return acc;
   }, { advance: 0, deposit: 0 });
@@ -222,11 +220,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-stone-50 font-sans text-stone-900 pb-32">
-      {/* Debug Banner */}
-      <div className={`text-white text-[10px] py-1 px-4 text-center font-bold sticky top-0 z-[100] ${bootError ? 'bg-black' : 'bg-red-600'}`}>
-        {bootError || `DEBUG MODE: ${VERSION} | GAS_URL: ${GAS_URL ? 'SET' : 'MISSING'}`}
-      </div>
-
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-md sticky top-0 z-30 border-b border-stone-100">
         <div className="max-w-2xl mx-auto px-6 py-6 flex justify-between items-center">
@@ -236,18 +229,18 @@ const App: React.FC = () => {
           </div>
           <div className="flex gap-2">
             <button 
-              id="sync-button"
-              onClick={(e) => {
-                console.log('Sync button clicked! Event:', e);
-                syncWithSpreadsheet();
-              }}
+              onClick={() => syncWithSpreadsheet()}
               disabled={isSyncing}
               title="スプレッドシート同期" 
-              className={`p-3 bg-stone-100 text-stone-600 rounded-2xl hover:bg-stone-200 transition-all z-50 ${isSyncing ? 'animate-spin text-[#FF9900]' : 'active:scale-90'}`}
+              className={`p-3 bg-stone-50 text-stone-400 rounded-2xl hover:bg-stone-100 transition-all ${isSyncing ? 'animate-spin text-[#FF9900]' : 'active:scale-90'}`}
             >
               <RefreshCw size={20} />
             </button>
-            <button title="設定" className="p-3 bg-stone-50 text-stone-400 rounded-2xl hover:bg-stone-100 transition-colors">
+            <button 
+              onClick={() => setShowSettings(true)}
+              title="設定" 
+              className="p-3 bg-stone-50 text-stone-400 rounded-2xl hover:bg-stone-100 transition-colors"
+            >
               <Settings size={20} />
             </button>
           </div>
@@ -321,12 +314,8 @@ const App: React.FC = () => {
       {/* Floating Action Buttons */}
       <div className="fixed bottom-10 left-0 right-0 flex justify-center items-center gap-6 z-40 px-6">
         <button 
-          id="camera-button"
-          onClick={(e) => {
-            console.log('Camera button clicked! Event:', e);
-            setShowScanner(true);
-          }}
-          className="w-20 h-20 text-white rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group overflow-hidden relative z-50"
+          onClick={() => setShowScanner(true)}
+          className="w-20 h-20 text-white rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group overflow-hidden relative"
           style={{
             background: 'linear-gradient(to bottom, #FFB84D 0%, #FF9900 100%)',
             boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), 0 15px 30px rgba(255,153,0,0.3)',
@@ -362,6 +351,53 @@ const App: React.FC = () => {
             onClose={() => setShowScanner(false)} 
             isProcessing={processingItems.length > 0}
           />
+        )}
+        {showSettings && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="bg-white rounded-[32px] w-full max-w-md p-8 shadow-2xl"
+            >
+              <h2 className="text-xl font-bold mb-6 text-[#003366]">アプリ設定</h2>
+              
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">
+                    Gemini APIキー (自動読み込み失敗時用)
+                  </label>
+                  <input 
+                    type="password"
+                    value={manualApiKey}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setManualApiKey(val);
+                      localStorage.setItem('manual_api_key', val);
+                    }}
+                    placeholder="AI Studioから取得したキーを入力"
+                    className="w-full bg-stone-50 border border-stone-100 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF9900]/20"
+                  />
+                  <p className="mt-2 text-[10px] text-stone-400 leading-relaxed">
+                    ※通常はPC側のSecrets設定が自動反映されますが、スマホでエラーが出る場合はこちらに直接入力してください。
+                  </p>
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <button 
+                    onClick={() => setShowSettings(false)}
+                    className="flex-1 py-4 bg-[#003366] text-white font-bold rounded-2xl hover:bg-[#002244] transition-colors"
+                  >
+                    閉じる
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
         {currentReceipt && (
           <ReceiptEditor 
